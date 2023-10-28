@@ -47,7 +47,7 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use compact_jwt::JwtError;
 use std::cmp::Ordering;
 use std::fmt;
-use std::rc;
+use std::sync;
 use std::str::FromStr;
 use tracing::{debug, error, info, warn};
 
@@ -1351,11 +1351,11 @@ impl TryFrom<RawFidoDevice> for FidoDevice {
 pub struct FidoMds {
     /// The set of FIDO2 device metadata that exists within the Metadata Statement, indexed by their
     /// aaguid / uuid.
-    pub fido2: Vec<rc::Rc<FIDO2>>,
+    pub fido2: Vec<sync::Arc<FIDO2>>,
     /// The set of (legacy) UAF device metadata that exists within the Metadata Statement.
     pub uaf: Vec<UAF>,
     /// The set of (legacy) U2f device metadata that exists within the Metadata Statement.
-    pub u2f: Vec<rc::Rc<U2F>>,
+    pub u2f: Vec<sync::Arc<U2F>>,
 }
 
 impl From<RawFidoMds> for FidoMds {
@@ -1372,12 +1372,12 @@ impl From<RawFidoMds> for FidoMds {
                 FidoDevice::Uaf(dev) => uaf.push(dev),
                 FidoDevice::U2F(dev) => {
                     // let akis = dev.attestation_certificate_key_identifiers.clone();
-                    let dev = rc::Rc::new(dev);
+                    let dev = sync::Arc::new(dev);
 
                     u2f.push(dev);
                 }
                 FidoDevice::FIDO2(dev) => {
-                    let dev = rc::Rc::new(dev);
+                    let dev = sync::Arc::new(dev);
                     fido2.push(dev)
                 }
             });
@@ -1403,7 +1403,7 @@ impl FromStr for FidoMds {
 }
 
 impl FidoMds {
-    pub fn fido2_query(&self, query: &Query) -> Option<Vec<rc::Rc<FIDO2>>> {
+    pub fn fido2_query(&self, query: &Query) -> Option<Vec<sync::Arc<FIDO2>>> {
         debug!(?query);
 
         // Iterate over the set of metadata.
@@ -1413,7 +1413,7 @@ impl FidoMds {
             .filter(|fd| fd.query_match(query))
             // This is cheap due to Rc,
             .cloned()
-            .collect::<Vec<rc::Rc<FIDO2>>>();
+            .collect::<Vec<sync::Arc<FIDO2>>>();
 
         // If != empty.
         if fds.is_empty() {
@@ -1423,7 +1423,7 @@ impl FidoMds {
         }
     }
 
-    pub fn fido2_to_attestation_ca_list(fds: &[rc::Rc<FIDO2>]) -> Option<AttestationCaList> {
+    pub fn fido2_to_attestation_ca_list(fds: &[sync::Arc<FIDO2>]) -> Option<AttestationCaList> {
         let data: Vec<_> = fds
             .iter()
             .flat_map(|fd| {
